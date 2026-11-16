@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Confeiteiro - SweetBite</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="fw-bold text-dark">📦 Painel de Pedidos - Confeitaria SweetBite</h3>
+                <span class="badge bg-danger">Módulo de Gestão Administrativa</span>
+            </div>
+            <a href="/" class="btn btn-outline-secondary">Ir para a Loja</a>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#ID</th>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Item Solicitado</th>
+                            <th>Qtd</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Observações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pedidos %}
+                        <tr>
+                            <td><strong>#{{ p.id }}</strong></td>
+                            <td><small class="text-muted">{{ p.criado_em }}</small></td>
+                            <td>{{ p.nome_cliente }}<br><small class="text-muted">{{ p.telefone }}</small></td>
+                            <td>{{ p.cupcake_nome }}</td>
+                            <td><span class="badge bg-secondary">{{ p.quantidade }}</span></td>
+                            <td class="fw-bold text-danger">R$ {{ "%.2f"|format(p.valor_total) }}</td>
+                            <td><span class="badge bg-success">{{ p.status }}</span></td>
+                            <td><small class="text-muted">{{ p.observacao or '-' }}</small></td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">Nenhum pedido registrado no momento.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
