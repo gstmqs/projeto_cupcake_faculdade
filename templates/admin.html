@@ -10,45 +10,74 @@
     </style>
 </head>
 <body class="p-4">
-    <div class="container">
+    <div class="container-fluid px-lg-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" onclick="this.parentElement.remove()"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h3 class="fw-bold text-dark">📦 Painel de Pedidos - Confeitaria SweetBite</h3>
-                <span class="badge bg-danger">Módulo de Gestão Administrativa</span>
+                <h3 class="fw-bold text-dark mb-1">📦 Painel de Pedidos - Confeitaria SweetBite</h3>
+                <span class="badge bg-danger">Módulo de Gestão Administrativa & Produção</span>
             </div>
-            <a href="/" class="btn btn-outline-secondary">Ir para a Loja</a>
+            <a href="/" class="btn btn-outline-danger fw-semibold rounded-pill px-4">← Ir para a Loja</a>
         </div>
 
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>#ID</th>
-                            <th>Data</th>
-                            <th>Cliente</th>
-                            <th>Item Solicitado</th>
-                            <th>Qtd</th>
-                            <th>Total</th>
-                            <th>Status</th>
-                            <th>Observações</th>
+                            <th>Data / Hora</th>
+                            <th>Cliente / Contato</th>
+                            <th>Endereço / CEP</th>
+                            <th>Itens Solicitados</th>
+                            <th>Qtd Total</th>
+                            <th>Valor Total</th>
+                            <th>Observações / Cartão</th>
+                            <th>Status / Ação</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for p in pedidos %}
                         <tr>
-                            <td><strong>#{{ p.id }}</strong></td>
+                            <td><a href="/rastreio/{{ p.id }}" class="fw-bold text-decoration-none text-danger">#{{ p.id }}</a></td>
                             <td><small class="text-muted">{{ p.criado_em }}</small></td>
-                            <td>{{ p.nome_cliente }}<br><small class="text-muted">{{ p.telefone }}</small></td>
-                            <td>{{ p.cupcake_nome }}</td>
-                            <td><span class="badge bg-secondary">{{ p.quantidade }}</span></td>
+                            <td>
+                                <strong>{{ p.nome_cliente }}</strong><br>
+                                <small class="text-muted">{{ p.telefone }} | {{ p.email_cliente }}</small>
+                            </td>
+                            <td>
+                                <small>{{ p.endereco }}</small>
+                                {% if p.cep %}<br><span class="badge bg-light text-dark border">CEP: {{ p.cep }}</span>{% endif %}
+                            </td>
+                            <td><span class="fw-semibold">{{ p.cupcake_nome }}</span></td>
+                            <td class="text-center"><span class="badge bg-secondary rounded-pill">{{ p.quantidade }} un.</span></td>
                             <td class="fw-bold text-danger">R$ {{ "%.2f"|format(p.valor_total) }}</td>
-                            <td><span class="badge bg-success">{{ p.status }}</span></td>
-                            <td><small class="text-muted">{{ p.observacao or '-' }}</small></td>
+                            <td><small class="text-muted">{{ p.observacao or '—' }}</small></td>
+                            <td>
+                                <form method="POST" action="/admin/pedido/{{ p.id }}/status" class="d-flex gap-1 align-items-center">
+                                    <select name="status" class="form-select form-select-sm" style="min-width: 145px;">
+                                        <option value="Recebido" {% if p.status == 'Recebido' %}selected{% endif %}>Recebido</option>
+                                        <option value="Em Produção" {% if p.status == 'Em Produção' %}selected{% endif %}>Em Produção</option>
+                                        <option value="Saiu para Entrega" {% if p.status == 'Saiu para Entrega' %}selected{% endif %}>Saiu para Entrega</option>
+                                        <option value="Entregue" {% if p.status == 'Entregue' %}selected{% endif %}>Entregue</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-success">Salvar</button>
+                                </form>
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center py-4 text-muted">Nenhum pedido registrado no momento.</td>
+                            <td colspan="9" class="text-center py-4 text-muted">Nenhum pedido registrado no momento.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -7,9 +7,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #fff5f8; font-family: 'Segoe UI', sans-serif; padding-bottom: 50px; }
-        .checkout-box { background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 35px; margin-top: 40px; }
-        .btn-finalizar { background-color: #d81b60; color: white; border-radius: 25px; font-weight: bold; width: 100%; padding: 14px; font-size: 1.1rem; }
+        .checkout-box { background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 35px; margin-top: 35px; }
+        .btn-finalizar { background-color: #d81b60; color: white; border-radius: 25px; font-weight: bold; width: 100%; padding: 14px; font-size: 1.1rem; border: none; }
         .btn-finalizar:hover { background-color: #ad1457; color: white; }
+        .btn-finalizar:disabled { background-color: #9e9e9e; cursor: not-allowed; }
         .item-thumb { width: 55px; height: 55px; object-fit: cover; border-radius: 10px; }
     </style>
 </head>
@@ -20,6 +21,17 @@
                 <div class="checkout-box">
                     <h3 class="fw-bold text-center text-danger mb-2">🧁 Resumo e Conclusão do Pedido</h3>
                     <p class="text-center text-muted mb-4">Confira as unidades selecionadas e informe os dados para a entrega</p>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                                    <strong>Atenção:</strong> {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" onclick="this.parentElement.remove()"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
 
                     <!-- Tabela de Itens Selecionados -->
                     <div class="card border-0 bg-light rounded-4 p-3 mb-4">
@@ -63,53 +75,88 @@
                     </div>
 
                     <!-- Formulário de Entrega e Pagamento -->
-                    <form method="POST" action="/checkout">
+                    <form id="form-checkout" method="POST" action="/checkout" onsubmit="return validarEnvioCheckout(event)">
                         <input type="hidden" name="confirmar_compra" value="1">
                         <input type="hidden" name="itens_json" value='{{ itens_json }}'>
 
                         <h5 class="fw-bold text-dark mb-3">Dados para Entrega:</h5>
-                        
+
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Nome Completo *</label>
-                            <input type="text" name="nome" class="form-control" placeholder="Ex: Gustavo Marques de Almeida" required>
+                            <input type="text" name="nome" class="form-control" placeholder="Ex: Gustavo Marques de Almeida" value="{{ form_data.nome if form_data else '' }}" required>
                         </div>
 
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">E-mail *</label>
-                                <input type="email" name="email" class="form-control" placeholder="gustavo@email.com" required>
+                                <input type="email" name="email" class="form-control" placeholder="gustavo@email.com" value="{{ form_data.email if form_data else '' }}" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Telefone / WhatsApp *</label>
-                                <input type="tel" name="telefone" class="form-control" placeholder="(11) 98765-4321" required>
+                                <input type="tel" name="telefone" class="form-control" placeholder="(11) 98765-4321" value="{{ form_data.telefone if form_data else '' }}" required>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Endereço Completo de Entrega (com CEP) *</label>
-                            <input type="text" name="endereco" class="form-control" placeholder="Rua, número, complemento, bairro e cidade" required>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">CEP *</label>
+                                <input type="text" name="cep" id="input-cep" class="form-control" placeholder="01310-100" maxlength="9" value="{{ form_data.cep if form_data else '' }}" oninput="mascaraCep(this)" required>
+                                <div class="invalid-feedback" id="erro-cep">Informe um CEP válido com 8 dígitos (ex: 01310-100).</div>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Endereço Completo (Rua, Número, Bairro) *</label>
+                                <input type="text" name="endereco" class="form-control" placeholder="Av. Paulista, 1000 - Apto 42, Bela Vista" value="{{ form_data.endereco if form_data else '' }}" required>
+                            </div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Forma de Pagamento</label>
-                            <select class="form-select">
-                                <option>PIX (Chave enviada na confirmação)</option>
-                                <option>Cartão de Crédito / Débito na Entrega</option>
-                                <option>Dinheiro</option>
+                            <select name="forma_pagamento" class="form-select">
+                                <option value="PIX (Chave enviada na confirmação)" {% if form_data and form_data.forma_pagamento == 'PIX (Chave enviada na confirmação)' %}selected{% endif %}>PIX (Chave enviada na confirmação)</option>
+                                <option value="Cartão de Crédito / Débito na Entrega" {% if form_data and form_data.forma_pagamento == 'Cartão de Crédito / Débito na Entrega' %}selected{% endif %}>Cartão de Crédito / Débito na Entrega</option>
+                                <option value="Dinheiro" {% if form_data and form_data.forma_pagamento == 'Dinheiro' %}selected{% endif %}>Dinheiro</option>
                             </select>
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-semibold">Instruções Especiais / Mensagem no Cartão (Opcional)</label>
-                            <textarea name="observacao" class="form-control" rows="2" placeholder="Deseja adicionar alguma mensagem de presente ou aviso de restrição alimentar?"></textarea>
+                            <label class="form-label fw-semibold">Instruções Especiais / Mensagem no Cartão de Presente (Opcional)</label>
+                            <textarea name="observacao" class="form-control" rows="2" placeholder="Deseja adicionar alguma mensagem de presente ou aviso de restrição alimentar?">{{ form_data.observacao if form_data else '' }}</textarea>
                         </div>
 
-                        <button type="submit" class="btn btn-finalizar">Confirmar e Finalizar Pedido</button>
+                        <button type="submit" id="btn-confirmar-pedido" class="btn btn-finalizar">Confirmar e Finalizar Pedido</button>
                         <a href="/" class="btn btn-link text-muted d-block text-center mt-3">← Voltar ao cardápio e alterar quantidades</a>
                     </form>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        function mascaraCep(input) {
+            let v = input.value.replace(/\D/g, '');
+            if (v.length > 5) {
+                v = v.substring(0, 5) + '-' + v.substring(5, 8);
+            }
+            input.value = v;
+            input.classList.remove('is-invalid');
+        }
+
+        function validarEnvioCheckout(event) {
+            const inputCep = document.getElementById('input-cep');
+            const digitosCep = inputCep.value.replace(/\D/g, '');
+            if (digitosCep.length !== 8) {
+                event.preventDefault();
+                inputCep.classList.add('is-invalid');
+                inputCep.focus();
+                return false;
+            }
+
+            // Proteção contra clique duplo apontada nos testes de homologação
+            const btn = document.getElementById('btn-confirmar-pedido');
+            btn.disabled = true;
+            btn.innerText = '⏳ Processando seu pedido...';
+            return true;
+        }
+    </script>
 </body>
 </html>

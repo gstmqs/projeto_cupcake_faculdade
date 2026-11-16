@@ -1,12 +1,15 @@
 import sys
 import os
-import json
 import pytest
 
 # Adicionar a pasta da aplicação ao sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app import app, init_db, salvar_pedido, salvar_pedido_multiplo, get_pedidos, get_produtos
+from app import (
+    app, init_db, salvar_pedido, salvar_pedido_multiplo,
+    get_pedidos, get_produtos, get_categorias, validar_cep, atualizar_status_pedido
+)
+
 
 @pytest.fixture
 def client():
@@ -15,11 +18,23 @@ def client():
     with app.test_client() as client:
         yield client
 
+
 def test_catalogo_carrega_com_sucesso(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "SweetBite Gourmet".encode("utf-8") in response.data
     assert "Red Velvet Cremoso".encode("utf-8") in response.data
+    assert "Cacau &amp; Coco Vegano".encode("utf-8") in response.data or "Vegano".encode("utf-8") in response.data
+
+
+def test_filtro_por_categoria(client):
+    categorias = get_categorias()
+    assert len(categorias) >= 3
+    # Filtrar pela categoria 1 (Clássicos)
+    response = client.get("/?categoria=1")
+    assert response.status_code == 200
+    assert "Red Velvet Cremoso".encode("utf-8") in response.data
+
 
 def test_calculo_subtotal_e_persistencia():
     pedido_id = salvar_pedido(
@@ -30,12 +45,15 @@ def test_calculo_subtotal_e_persistencia():
         cupcake_nome="Red Velvet Cremoso",
         quantidade=3,
         valor_total=43.50,
-        observacao="Entregar em embalagem para presente"
+        observacao="Entregar em embalagem para presente",
+        cep="01310-100",
+        forma_pagamento="PIX"
     )
     assert pedido_id > 0
     pedidos = get_pedidos()
-    encontrado = any(p["id"] == pedido_id and p["valor_total"] == 43.50 for p in pedidos)
+    encontrado = any(p["id"] == pedido_id and p["valor_total"] == 43.50 and p["cep"] == "01310-100" for p in pedidos)
     assert encontrado is True
+
 
 def test_pedido_multiplos_produtos_com_quantidades():
     itens = [
@@ -45,7 +63,7 @@ def test_pedido_multiplos_produtos_com_quantidades():
     # 2 x 14.50 (29.00) + 3 x 15.00 (45.00) = 74.00
     total = sum(i["quantidade"] * i["preco"] for i in itens)
     assert total == 74.00
-    
+
     pedido_id = salvar_pedido_multiplo(
         nome="Gustavo Marques",
         email="gustavo@email.com",
@@ -53,19 +71,47 @@ def test_pedido_multiplos_produtos_com_quantidades():
         endereco="Rua dos Cupcakes, 123",
         itens=itens,
         valor_total=total,
-        observacao="Favor caprichar na cobertura"
+        observacao="Parabéns pelo aniversário!",
+        cep="04538-132"
     )
     assert pedido_id > 0
     pedidos = get_pedidos()
     encontrado = any(p["id"] == pedido_id and p["quantidade"] == 5 and p["valor_total"] == 74.00 for p in pedidos)
     assert encontrado is True
 
+
+def test_validacao_cep_formato_correto_e_invalido():
+    assert validar_cep("01310-100") is True
+    assert validar_cep("01310100") is True
+    assert validar_cep("123") is False
+    assert validar_cep("abcdefgh") is False
+
+
+def test_atualizacao_status_painel_confeiteiro(client):
+    pedido_id = salvar_pedido(
+        nome="Cliente Status",
+        email="status@teste.com",
+        telefone="(11) 91111-2222",
+        endereco="Rua A, 10",
+        cupcake_nome="Pistache & Framboesa",
+        quantidade=1,
+        valor_total=17.50,
+        cep="01001-000"
+    )
+    response = client.post(f"/admin/pedido/{pedido_id}/status", data={"status": "Em Produção"}, follow_redirects=True)
+    assert response.status_code == 200
+    pedidos = get_pedidos()
+    atualizado = any(p["id"] == pedido_id and p["status"] == "Em Produção" for p in pedidos)
+    assert atualizado is True
+
+
 def test_pagina_checkout_produto_valido(client):
     response = client.get("/comprar/1")
     assert response.status_code == 200
-    assert "Finalizar Pedido".encode("utf-8") in response.data or "Resumo".encode("utf-8") in response.data
+    assert "Resumo".encode("utf-8") in response.data
+
 
 def test_pagina_checkout_produto_invalido(client):
     response = client.get("/comprar/9999", follow_redirects=True)
     assert response.status_code == 200
-    assert "não encontrado".encode("utf-8") in response.data or response.status_code == 200
+    assert "não encontrado".encode("utf-8") in response.data
