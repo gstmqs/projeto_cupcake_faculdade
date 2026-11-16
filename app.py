@@ -8,6 +8,7 @@ Arquitetura: MVC (Model-View-Controller)
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import sqlite3
 import os
+import json
 
 app = Flask(__name__)
 app.secret_key = "sweetbite_secret_key_pit2"
@@ -32,7 +33,7 @@ def init_db():
         descricao TEXT NOT NULL,
         preco REAL NOT NULL,
         imagem_url TEXT,
-        estoque INTEGER DEFAULT 10,
+        estoque INTEGER DEFAULT 20,
         FOREIGN KEY (categoria_id) REFERENCES categorias(id)
     );
     """)
@@ -49,6 +50,18 @@ def init_db():
         status TEXT DEFAULT 'Recebido',
         observacao TEXT,
         criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS itens_pedido (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pedido_id INTEGER NOT NULL,
+        produto_id INTEGER NOT NULL,
+        nome_produto TEXT NOT NULL,
+        quantidade INTEGER NOT NULL,
+        preco_unitario REAL NOT NULL,
+        FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
+        FOREIGN KEY (produto_id) REFERENCES produtos(id)
     );
     """)
     
@@ -99,6 +112,31 @@ def salvar_pedido(nome, email, telefone, endereco, cupcake_nome, quantidade, val
     conn.close()
     return pedido_id
 
+def salvar_pedido_multiplo(nome, email, telefone, endereco, itens, valor_total, observacao=""):
+    """Salva pedido com múltiplos itens e suas respectivas quantidades"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Criar descrição resumida ex: "2x Red Velvet Cremoso, 3x Chocolatudo Belga"
+    descricao_itens = ", ".join([f"{item['quantidade']}x {item['nome']}" for item in itens])
+    qtd_total = sum(item['quantidade'] for item in itens)
+    
+    cursor.execute("""
+    INSERT INTO pedidos (nome_cliente, email_cliente, telefone, endereco, cupcake_nome, quantidade, valor_total, observacao)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (nome, email, telefone, endereco, descricao_itens, qtd_total, valor_total, observacao))
+    pedido_id = cursor.lastrowid
+    
+    for item in itens:
+        cursor.execute("""
+        INSERT INTO itens_pedido (pedido_id, produto_id, nome_produto, quantidade, preco_unitario)
+        VALUES (?, ?, ?, ?, ?)
+        """, (pedido_id, item['produto_id'], item['nome'], item['quantidade'], item['preco']))
+        
+    conn.commit()
+    conn.close()
+    return pedido_id
+
 def get_pedidos():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -114,8 +152,71 @@ def index():
     produtos = get_produtos()
     return render_template("index.html", produtos=produtos)
 
+@app.route("/checkout", methods=["GET", "POST"])
+def checkout_carrinho():
+    produtos = get_produtos()
+    produtos_dict = {p["id"]: p for p in produtos}
+    
+    if request.method == "POST":
+        # Se for o POST final de confirmação de compra
+        if "confirmar_compra" in request.form:
+            nome = request.form.get("nome")
+            email = request.form.get("email")
+            telefone = request.form.get("telefone")
+            endereco = request.form.get("endereco")
+            observacao = request.form.get("observacao", "")
+            itens_json = request.form.get("itens_json")
+            
+            if not itens_json:
+                flash("Carrinho vazio! Selecione ao menos um produto.", "warning")
+                return redirect(url_for("index"))
+                
+            try:
+                itens = json.loads(itens_json)
+            except Exception:
+                itens = []
+                
+            if not itens:
+                flash("Nenhum item selecionado!", "warning")
+                return redirect(url_for("index"))
+                
+            valor_total = sum(item["quantidade"] * item["preco"] for item in itens)
+            pedido_id = salvar_pedido_multiplo(nome, email, telefone, endereco, itens, valor_total, observacao)
+            flash("Pedido realizado com sucesso! Seus cupcakes já estão sendo preparados.", "success")
+            return redirect(url_for("rastreio", pedido_id=pedido_id))
+            
+        # Se for o POST vindo do catálogo (seleção de quantidades)
+        itens = []
+        for p in produtos:
+            qtd_str = request.form.get(f"qtd_{p['id']}", "0")
+            try:
+                qtd = int(qtd_str)
+            except ValueError:
+                qtd = 0
+                
+            if qtd > 0:
+                itens.append({
+                    "produto_id": p["id"],
+                    "nome": p["nome"],
+                    "descricao": p["descricao"],
+                    "preco": p["preco"],
+                    "imagem_url": p["imagem_url"],
+                    "quantidade": qtd,
+                    "subtotal": round(qtd * p["preco"], 2)
+                })
+                
+        if not itens:
+            flash("Por favor, selecione ao menos 1 unidade de algum cupcake antes de continuar!", "warning")
+            return redirect(url_for("index"))
+            
+        valor_total = sum(item["subtotal"] for item in itens)
+        return render_template("checkout.html", itens=itens, valor_total=valor_total, itens_json=json.dumps(itens))
+        
+    return redirect(url_for("index"))
+
 @app.route("/comprar/<int:produto_id>", methods=["GET", "POST"])
 def comprar(produto_id):
+    """Permite comprar um produto específico individualmente ou ajustar sua quantidade"""
     produto = get_produto_por_id(produto_id)
     if not produto:
         flash("Produto não encontrado!", "danger")
@@ -131,14 +232,33 @@ def comprar(produto_id):
         
         if not nome or not email or not endereco:
             flash("Por favor, preencha todos os campos obrigatórios!", "warning")
-            return render_template("checkout.html", produto=produto)
+            itens = [{
+                "produto_id": produto["id"],
+                "nome": produto["nome"],
+                "descricao": produto["descricao"],
+                "preco": produto["preco"],
+                "imagem_url": produto["imagem_url"],
+                "quantidade": quantidade,
+                "subtotal": round(quantidade * produto["preco"], 2)
+            }]
+            return render_template("checkout.html", itens=itens, valor_total=round(quantidade * produto["preco"], 2), itens_json=json.dumps(itens))
             
-        valor_total = quantidade * produto["preco"]
+        valor_total = round(quantidade * produto["preco"], 2)
         pedido_id = salvar_pedido(nome, email, telefone, endereco, produto["nome"], quantidade, valor_total, observacao)
         flash("Pedido realizado com sucesso! Agradecemos a preferência.", "success")
         return redirect(url_for("rastreio", pedido_id=pedido_id))
         
-    return render_template("checkout.html", produto=produto)
+    # GET: monta a lista de itens com 1 unidade por padrão
+    itens = [{
+        "produto_id": produto["id"],
+        "nome": produto["nome"],
+        "descricao": produto["descricao"],
+        "preco": produto["preco"],
+        "imagem_url": produto["imagem_url"],
+        "quantidade": 1,
+        "subtotal": produto["preco"]
+    }]
+    return render_template("checkout.html", itens=itens, valor_total=produto["preco"], itens_json=json.dumps(itens))
 
 @app.route("/rastreio/<int:pedido_id>")
 def rastreio(pedido_id):

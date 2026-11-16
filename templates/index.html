@@ -7,21 +7,26 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root { --primary-color: #d81b60; --bg-soft: #fff5f8; }
-        body { background-color: var(--bg-soft); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .hero { background: linear-gradient(135deg, #d81b60, #f06292); color: white; padding: 45px 0; border-radius: 0 0 25px 25px; margin-bottom: 30px; text-align: center; }
+        body { background-color: var(--bg-soft); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding-bottom: 100px; }
+        .hero { background: linear-gradient(135deg, #d81b60, #f06292); color: white; padding: 40px 0; border-radius: 0 0 25px 25px; margin-bottom: 30px; text-align: center; }
         .card-cupcake { border: none; border-radius: 18px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.06); transition: transform 0.25s ease; background: #fff; }
-        .card-cupcake:hover { transform: translateY(-6px); }
-        .cupcake-img { height: 220px; object-fit: cover; }
-        .btn-sweet { background-color: var(--primary-color); color: white; border-radius: 25px; padding: 8px 22px; font-weight: 600; }
+        .card-cupcake:hover { transform: translateY(-4px); }
+        .cupcake-img { height: 210px; object-fit: cover; }
+        .btn-sweet { background-color: var(--primary-color); color: white; border-radius: 25px; padding: 6px 18px; font-weight: 600; }
         .btn-sweet:hover { background-color: #ad1457; color: white; }
+        .qty-control { max-width: 140px; margin: 0 auto; }
+        .qty-btn { width: 36px; height: 36px; font-weight: bold; border-radius: 50% !important; display: flex; align-items: center; justify-content: center; }
+        .qty-input { font-weight: bold; text-align: center; border: 1px solid #ced4da; }
+        /* Barra Fixa Flutuante do Carrinho */
+        .cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #ffffff; box-shadow: 0 -5px 25px rgba(0,0,0,0.12); padding: 15px 0; z-index: 1050; border-top: 3px solid var(--primary-color); }
     </style>
 </head>
 <body>
     <div class="hero">
         <div class="container">
             <h1 class="display-5 fw-bold">🧁 SweetBite Gourmet</h1>
-            <p class="lead mb-0">Cupcakes feitos à mão com ingredientes nobres | Projeto Integrador II</p>
-            <small>Estudante: Gustavo Marques de Almeida (RGM: 35691042)</small>
+            <p class="lead mb-0">Selecione as unidades de cada cupcake artesanal e monte seu pedido!</p>
+            <small>Projeto Integrador II | Estudante: Gustavo Marques de Almeida (RGM: 35691042)</small>
         </div>
     </div>
     
@@ -38,27 +43,111 @@
         {% endwith %}
 
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3 class="fw-bold text-secondary">Catálogo de Sabores Exclusivos</h3>
+            <div>
+                <h3 class="fw-bold text-secondary mb-0">Cardápio de Cupcakes Gourmet</h3>
+                <small class="text-muted">Escolha a quantidade desejada de cada sabor</small>
+            </div>
             <a href="/admin/pedidos" class="btn btn-outline-secondary btn-sm">Painel do Confeiteiro</a>
         </div>
 
-        <div class="row g-4 mb-5">
-            {% for p in produtos %}
-            <div class="col-md-6 col-lg-3">
-                <div class="card card-cupcake h-100">
-                    <img src="{{ p.imagem_url }}" class="card-img-top cupcake-img" alt="{{ p.nome }}">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title fw-bold text-dark">{{ p.nome }}</h5>
-                        <p class="card-text text-muted small flex-grow-1">{{ p.descricao }}</p>
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <span class="fs-5 fw-bold text-danger">R$ {{ "%.2f"|format(p.preco) }}</span>
-                            <a href="/comprar/{{ p.id }}" class="btn btn-sweet">Pedir Agora</a>
+        <form id="form-catalogo" method="POST" action="/checkout">
+            <div class="row g-4 mb-5">
+                {% for p in produtos %}
+                <div class="col-md-6 col-lg-3">
+                    <div class="card card-cupcake h-100">
+                        <img src="{{ p.imagem_url }}" class="card-img-top cupcake-img" alt="{{ p.nome }}">
+                        <div class="card-body d-flex flex-column text-center">
+                            <h5 class="card-title fw-bold text-dark">{{ p.nome }}</h5>
+                            <p class="card-text text-muted small flex-grow-1">{{ p.descricao }}</p>
+                            <div class="my-2">
+                                <span class="fs-5 fw-bold text-danger">R$ {{ "%.2f"|format(p.preco) }}</span>
+                                <small class="text-muted d-block">unitário</small>
+                            </div>
+
+                            <!-- Controle de Quantidade de cada Produto -->
+                            <div class="d-flex justify-content-center align-items-center gap-2 qty-control my-2">
+                                <button type="button" class="btn btn-outline-danger qty-btn" onclick="alterarQtd({{ p.id }}, -1)">−</button>
+                                <input type="number" name="qtd_{{ p.id }}" id="qtd_{{ p.id }}" 
+                                       class="form-control qty-input input-produto-qtd" 
+                                       value="0" min="0" max="50" 
+                                       data-id="{{ p.id }}" 
+                                       data-nome="{{ p.nome }}" 
+                                       data-preco="{{ p.preco }}" 
+                                       onchange="recalcularTotais()">
+                                <button type="button" class="btn btn-outline-success qty-btn" onclick="alterarQtd({{ p.id }}, 1)">+</button>
+                            </div>
+
+                            <small class="text-muted mt-1" id="subtotal_item_{{ p.id }}">Subtotal: R$ 0,00</small>
                         </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
+
+            <!-- Barra Inferior do Carrinho de Compras -->
+            <div class="cart-bar">
+                <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="fw-bold text-dark fs-5">🛒 Seu Pedido:</span>
+                        <span class="badge bg-danger rounded-pill fs-6 ms-2" id="badge-total-itens">0 unidades</span>
+                        <span class="fw-bold text-danger fs-4 ms-3" id="badge-total-valor">R$ 0,00</span>
+                    </div>
+                    <div>
+                        <button type="submit" id="btn-avancar-checkout" class="btn btn-sweet px-4 py-2 fs-6" disabled>
+                            Finalizar Pedido com os Itens Selecionados ➔
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
     </div>
+
+    <script>
+        function alterarQtd(id, delta) {
+            const input = document.getElementById('qtd_' + id);
+            let val = parseInt(input.value) || 0;
+            val = Math.max(0, Math.min(50, val + delta));
+            input.value = val;
+            recalcularTotais();
+        }
+
+        function recalcularTotais() {
+            const inputs = document.querySelectorAll('.input-produto-qtd');
+            let totalUnidades = 0;
+            let totalReais = 0;
+
+            inputs.forEach(input => {
+                const qtd = parseInt(input.value) || 0;
+                const preco = parseFloat(input.getAttribute('data-preco')) || 0;
+                const id = input.getAttribute('data-id');
+                const subtotal = qtd * preco;
+
+                totalUnidades += qtd;
+                totalReais += subtotal;
+
+                const labelSubtotal = document.getElementById('subtotal_item_' + id);
+                if (labelSubtotal) {
+                    labelSubtotal.innerText = 'Subtotal: R$ ' + subtotal.toFixed(2).replace('.', ',');
+                    if (qtd > 0) {
+                        labelSubtotal.classList.add('text-danger', 'fw-bold');
+                        labelSubtotal.classList.remove('text-muted');
+                    } else {
+                        labelSubtotal.classList.remove('text-danger', 'fw-bold');
+                        labelSubtotal.classList.add('text-muted');
+                    }
+                }
+            });
+
+            document.getElementById('badge-total-itens').innerText = totalUnidades + (totalUnidades === 1 ? ' unidade' : ' unidades');
+            document.getElementById('badge-total-valor').innerText = 'R$ ' + totalReais.toFixed(2).replace('.', ',');
+
+            const btn = document.getElementById('btn-avancar-checkout');
+            if (totalUnidades > 0) {
+                btn.removeAttribute('disabled');
+            } else {
+                btn.setAttribute('disabled', 'true');
+            }
+        }
+    </script>
 </body>
 </html>
