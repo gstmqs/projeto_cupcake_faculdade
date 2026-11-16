@@ -431,6 +431,8 @@ def admin_alterar_status(pedido_id):
     return redirect(url_for("admin_pedidos"))
 
 
+# Garantir inicialização do banco e das categorias ao carregar o módulo
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True, port=5000)

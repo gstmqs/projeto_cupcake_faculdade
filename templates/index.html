@@ -53,11 +53,17 @@
         </div>
 
         <!-- Barra de Filtro por Categorias -->
+        {% set lista_categorias = categorias if categorias else [
+            {'id': 1, 'nome': 'Clássicos'},
+            {'id': 2, 'nome': 'Especiais'},
+            {'id': 3, 'nome': 'Veganos'}
+        ] %}
+        {% set mapa_cat = {1: 'Clássicos', 2: 'Especiais', 3: 'Veganos'} %}
         <div class="d-flex flex-wrap gap-2 mb-4" id="barra-filtros-categoria">
             <button type="button" class="btn-filter {% if not categoria_selecionada %}active{% endif %}" data-filtro="todas" onclick="filtrarCategoria('todas', this)">
                 Todos os Sabores
             </button>
-            {% for cat in categorias %}
+            {% for cat in lista_categorias %}
             <button type="button" class="btn-filter {% if categoria_selecionada == cat.id %}active{% endif %}" data-filtro="{{ cat.id }}" onclick="filtrarCategoria('{{ cat.id }}', this)">
                 {{ cat.nome }}
             </button>
@@ -67,12 +73,13 @@
         <form id="form-catalogo" method="POST" action="/checkout">
             <div class="row g-4 mb-5" id="grid-produtos">
                 {% for p in produtos %}
-                <div class="col-md-6 col-lg-4 col-xl-3 item-card-col" data-categoria-id="{{ p.categoria_id }}" data-categoria-nome="{{ p.categoria_nome }}">
+                {% set nome_cat = p.categoria_nome if p.categoria_nome is defined and p.categoria_nome else mapa_cat.get(p.categoria_id, 'Gourmet') %}
+                <div class="col-md-6 col-lg-4 col-xl-3 item-card-col" data-categoria-id="{{ p.categoria_id }}" data-categoria-nome="{{ nome_cat }}">
                     <div class="card card-cupcake h-100">
                         <img src="{{ p.imagem_url }}" class="card-img-top cupcake-img" alt="{{ p.nome }}">
                         <div class="card-body d-flex flex-column text-center">
                             <div class="mb-2">
-                                <span class="badge-cat">{{ p.categoria_nome or 'Gourmet' }}</span>
+                                <span class="badge-cat">{{ nome_cat }}</span>
                             </div>
                             <h5 class="card-title fw-bold text-dark">{{ p.nome }}</h5>
                             <p class="card-text text-muted small flex-grow-1">{{ p.descricao }}</p>
